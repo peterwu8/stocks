@@ -337,7 +337,8 @@ def main():
     initialize()
     (_, unknown_list) = load_historic_data(get_symbols())
     # Try GoogleFinance for unknown stocks
-    google_analysis(unknown_list)
+    if unknown_list:
+        google_analysis(unknown_list)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 main()
