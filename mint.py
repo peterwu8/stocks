@@ -15,9 +15,11 @@ from functools import reduce
 import csv
 from multiprocessing import Pool
 import googlefinance 
+import pandas_datareader.data as web
 
 mutex = Lock()
 total_stocks_count = 0
+MAX_ALLOWED_DAYS_TO_SUBTRACT = 5*365
 
 ############## UTILITY FUNCTIONS ##############
 def get_ratio(now, base):
@@ -27,7 +29,16 @@ def get_ratio_percent(now, base):
     return "{0:.2f}%".format(get_ratio(now, base) * 100)
 
 def get_today():
+    return datetime.today()
+
+def get_today_string():
     return datetime.today().strftime("%Y-%m-%d")
+
+def get_today_minus_days(total_days_to_subtract):
+    return datetime.today() - timedelta(days=total_days_to_subtract)
+
+def get_today_minus_days_string(total_days_to_subtract):
+    return get_today_minus_days(total_days_to_subtract).strftime("%Y-%m-%d")
 
 def modification_date(filename):
     t = os.path.getmtime(filename)
@@ -48,6 +59,14 @@ def make_url(ticker_symbol):
     base_url = "http://ichart.finance.yahoo.com/table.csv?s="
     return base_url + ticker_symbol
 
+def get_google_site_flag(ticker_symbol):
+    return get_historical_data_csv_file(ticker_symbol) + '-google'
+
+def touch_file(flag_filename):
+    with open(flag_filename, "w") as f:
+        f.write("")
+    print ("Touched file: {}".format(flag_filename))
+
 class HistoricCsvFile:
     '''
     API for a set of historic data points in CSV file format
@@ -55,6 +74,7 @@ class HistoricCsvFile:
     def __init__(self, ticker_symbol):
         self._data_set = []
         self._headers = []
+        self._is_from_google = os.path.exists(get_google_site_flag(ticker_symbol))
         with open(get_historical_data_csv_file(ticker_symbol), mode='r') as infile:
             reader = csv.reader(infile)
             for row in reader:
@@ -67,8 +87,16 @@ class HistoricCsvFile:
                     self._data_set.append(mydict)
                 else:
                     for column in row:
-                        self._headers.append(column.replace(" ", "_"))
-        self._data_set.reverse() # sort from oldest to newest
+                        header_name = column.replace(" ", "_")
+                        if self._is_from_google and header_name == 'Close':
+                            # Google Close is already adjusted.
+                            header_name = 'Adj_Close'
+                        self._headers.append(header_name)
+        if not self._is_from_google:
+            self._data_set.reverse() # sort from oldest to newest
+
+    def is_google_data(self):
+        return self._is_from_google
 
     def get_historical(self, start_date):
         """
@@ -114,22 +142,18 @@ class HistoricDataPoint:
         return float(self._data['Adj_Close'])
 
     def get_price_swing_ratio(self):
-        return get_ratio(self._data['High'], self._data['Low'])
+        return get_ratio(self._data['High'], self._data['Low']) if self._data['High'] and self._data['Low'] else 0
 
 class HistoricDataSetView:
     '''
     API for a subset of historic data points
     '''
-    def __init__(self, yahoo, csv_data, days_to_subtract):
-        self._yahoo = yahoo
+    def __init__(self, ticker, csv_data, days_to_subtract):
+        self._ticker = ticker
         self._days_to_subtract = days_to_subtract
-        self._data_set = [HistoricDataPoint(data) for data in csv_data.get_historical(self._get_today_minus_days(self._days_to_subtract))]
+        self._data_set = [HistoricDataPoint(data) for data in csv_data.get_historical(get_today_minus_days_string(self._days_to_subtract))]
         if not self._data_set:
-            print (" > {}:     Data is missing for {}!".format(self._get_stats_title(), self._get_today_minus_days(self._days_to_subtract)))
-
-    def _get_today_minus_days(self, total_days_to_subtract):
-        d = datetime.today() - timedelta(days=total_days_to_subtract)
-        return d.strftime("%Y-%m-%d")
+            print (" > {}:     Data is missing from {}!".format(self._get_stats_title(), get_today_minus_days_string(self._days_to_subtract)))
 
     def _get_ith_day_closing_price(self, ith_day):
         '''Zero-based index from oldest to newest date'''
@@ -169,25 +193,49 @@ class HistoricDataSetView:
         if not moving_average:
             moving_average = self._get_moving_average()
         if not percent_change_moving_average:
-            percent_change_moving_average = get_ratio_percent(self._yahoo.get_price(), moving_average)
+            percent_change_moving_average = get_ratio_percent(self._ticker.get_last_price(), moving_average)
         price_swing = self._get_price_swing_ratio()
         print (" > {}:     {} @ {} ({}: {} @ {}, Day fluct: min[{}] max[{}] avg[{}])".format(
                                                                 self._get_stats_title(),
                                                                 percent_change_moving_average,
                                                                 "${0:.2f}".format(float(moving_average)),
                                                                 self._data_set[0].get_date(),
-                                                                get_ratio_percent(self._yahoo.get_price(), self._data_set[0].get_closing_price()),
+                                                                get_ratio_percent(self._ticker.get_last_price(), self._data_set[0].get_closing_price()),
                                                                 "${0:.2f}".format(self._data_set[0].get_closing_price()),
                                                                 price_swing[0], price_swing[1], price_swing[2]))
 
 class TickerData:
     def __init__(self, ticker_symbol):
         self._name = ticker_symbol
-        self._yahoo = Share(ticker_symbol)
+        self._yahoo = None
+        self._google = None
         self._csv_data = HistoricCsvFile(ticker_symbol)
+        if self._csv_data.is_google_data():
+            self._google = googlefinance.getQuotes(ticker_symbol)[0]
+            print (json.dumps(self._google, indent=2))
+        else:
+            self._yahoo = Share(ticker_symbol)
 
     def get_name(self):
         return self._name
+
+    def get_long_name(self):
+        return self._yahoo.get_name() if self._yahoo else self._name
+
+    def get_last_price(self):
+        return self._yahoo.get_price() if self._yahoo else self._google['LastTradePrice']
+
+    def get_last_trade_datetime(self):
+        return self._yahoo.get_trade_datetime() if self._yahoo else self._google['LastTradeDateTime']
+
+    def get_price_change(self):
+        return self._yahoo.get_change() if self._yahoo else self._google['ChangePercent']
+
+    def get_price_open(self):
+        return self._yahoo.get_open() if self._yahoo else self._google['PreviousClosePrice']
+
+    def get_percent_change(self):
+        return self._yahoo.get_percent_change() if self._yahoo else get_ratio_percent(self.get_last_price(), self.get_price_open())
 
     def get_yahoo(self):
         return self._yahoo
@@ -196,27 +244,26 @@ class TickerData:
         return self._csv_data
 
 def print_ticker_info(ticker):
+    global MAX_ALLOWED_DAYS_TO_SUBTRACT
     ticker_symbol = ticker.get_name()
     yahoo = ticker.get_yahoo()
     csv_data = ticker.get_csv_data()
-    if not yahoo.get_name():
-        print ("Error: {} is not a valid stock name".format(ticker_symbol))
-        return False
-    print ("Ticker: {} ({})".format(ticker_symbol.upper(), yahoo.get_name()))
-    print (" > Last price: ${}".format(yahoo.get_price()))
-    print (" > Last trade: {}".format(yahoo.get_trade_datetime()))
-    print (" > Open:       {} @ {} / ${}".format(yahoo.get_percent_change(), yahoo.get_change(), yahoo.get_open()))
-    HistoricDataSetView(yahoo, csv_data, 50).print_stats(yahoo.get_50day_moving_avg(),
-                                                         yahoo.get_percent_change_from_50_day_moving_average())
-    HistoricDataSetView(yahoo, csv_data, 200).print_stats(yahoo.get_200day_moving_avg(),
-                                                          yahoo.get_percent_change_from_200_day_moving_average())
-    HistoricDataSetView(yahoo, csv_data, 365).print_stats()
-    HistoricDataSetView(yahoo, csv_data, 5*365).print_stats()
-    print (" > Year high:  {} @ ${}".format(yahoo.get_percent_change_from_year_high(), yahoo.get_year_high()))
-    print (" > Year low:   {} @ ${}".format(yahoo.get_percent_change_from_year_low(), yahoo.get_year_low()))
-    if yahoo.get_short_ratio():
-        print (" > Short:       {} @ {}".format(yahoo.get_short_ratio(), get_ratio_percent(yahoo.get_volume(), yahoo.get_avg_daily_volume()) if yahoo.get_volume() and yahoo.get_avg_daily_volume() else 'Missing volume'))
-        print (" > P/E:         {} @ (Growth: {}, Earning: {})".format(yahoo.get_price_earnings_ratio(), yahoo.get_price_earnings_growth_ratio(), yahoo.get_earnings_share()))
+    print ("Ticker: {} ({})".format(ticker_symbol.upper(), ticker.get_long_name()))
+    print (" > Last price: ${}".format(ticker.get_last_price()))
+    print (" > Last trade: {}".format(ticker.get_last_trade_datetime()))
+    print (" > Open:       {} @ {} / ${}".format(ticker.get_percent_change(), ticker.get_price_change(), ticker.get_price_open()))
+    HistoricDataSetView(ticker, csv_data, 50).print_stats(yahoo.get_50day_moving_avg() if yahoo else None,
+                                                          yahoo.get_percent_change_from_50_day_moving_average() if yahoo else None)
+    HistoricDataSetView(ticker, csv_data, 200).print_stats(yahoo.get_200day_moving_avg() if yahoo else None,
+                                                           yahoo.get_percent_change_from_200_day_moving_average() if yahoo else None)
+    HistoricDataSetView(ticker, csv_data, 365).print_stats()
+    HistoricDataSetView(ticker, csv_data, MAX_ALLOWED_DAYS_TO_SUBTRACT).print_stats()
+    if yahoo:
+        print (" > Year high:  {} @ ${}".format(yahoo.get_percent_change_from_year_high(), yahoo.get_year_high()))
+        print (" > Year low:   {} @ ${}".format(yahoo.get_percent_change_from_year_low(), yahoo.get_year_low()))
+        if yahoo.get_short_ratio():
+            print (" > Short:       {} @ {}".format(yahoo.get_short_ratio(), get_ratio_percent(yahoo.get_volume(), yahoo.get_avg_daily_volume()) if yahoo.get_volume() and yahoo.get_avg_daily_volume() else 'Missing volume'))
+            print (" > P/E:         {} @ (Growth: {}, Earning: {})".format(yahoo.get_price_earnings_ratio(), yahoo.get_price_earnings_growth_ratio(), yahoo.get_earnings_share()))
 
     # ========= Old stuff ========= #
     # realtime = Stock(ticker_symbol)
@@ -239,14 +286,14 @@ def get_default_symbols():
             'AAPL', 'GOOGL', 'AMZN', 'BRK-B', 'FDC', 'MSFT', 'TWTR', 'TSLA', 'GLOB']
 
 def process_options():
-    parser = argparse.ArgumentParser(description='Analyze stock prices.')
-    parser.add_argument('ticker_symbols', metavar='TICKER_SYMBOL', nargs='*', help='NAME of the stock ticker symbol')
-    parser.add_argument('--file', metavar='FILE_NAME', help='FILE_NAME listing stock ticker symbols')
+    parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
+    parser.add_argument('ticker_symbols', metavar='TICKER_SYMBOL', nargs='*', help='NAME of the ticker_symbol ticker symbol')
+    parser.add_argument('--file', metavar='FILE_NAME', help='FILE_NAME listing ticker_symbol ticker symbols')
     args = parser.parse_args()
     return args
 
 def read_stock_list_file(file_name):
-    '''White line delimited list of stock symbols'''
+    '''White line delimited list of ticker_symbol symbols'''
     with open(file_name, mode='r') as infile:
         return [re.sub('[^0-9a-zA-Z]+', '-', row[0].strip()) for row in csv.reader(infile)]
     return []
@@ -272,13 +319,17 @@ def split_into_sublists(seq, num):
     return out
 
 def load_historic_data_for_subset(thread_id, ticker_symbols, ticker_queue, unknown_queue):
-    global total_stocks_count
+    global total_stocks_count, MAX_ALLOWED_DAYS_TO_SUBTRACT
     for ticker_symbol_sublist in split_into_sublists(ticker_symbols, 150):
         tickers = []
         for ticker_symbol in ticker_symbol_sublist:
             output_file = get_historical_data_csv_file(ticker_symbol)
             is_okay = True
-            if not os.path.exists(output_file) or modification_date(output_file) != get_today():
+            if not os.path.exists(output_file) or modification_date(output_file) != get_today_string():
+                try:
+                    os.remove(output_file)
+                except OSError:
+                    pass
                 try:
                     urllib.request.urlretrieve(make_url(ticker_symbol), output_file)
                 except urllib.error.ContentTooShortError as e:
@@ -286,9 +337,25 @@ def load_historic_data_for_subset(thread_id, ticker_symbols, ticker_queue, unkno
                     outfile.write(e.content)
                     outfile.close()
                 except:
-                    print ("ERROR: No Yahoo data for {}".format(ticker_symbol))
+                    print ("INFO: No Yahoo data for {}. Trying Google...".format(ticker_symbol))
                     unknown_queue.put(ticker_symbol)
                     is_okay = False
+                if not is_okay:
+                    google_site_flag = get_google_site_flag(ticker_symbol)
+                    try:
+                        os.remove(google_site_flag)
+                    except OSError:
+                        pass
+                    try:
+                        start_date = get_today_minus_days(MAX_ALLOWED_DAYS_TO_SUBTRACT)
+                        end_date = get_today()
+                        df = web.DataReader(ticker_symbol, 'google', start_date, end_date)
+                        df.to_csv(output_file)
+                        is_okay = os.path.exists(output_file)
+                    except:
+                        print ("ERROR: No Google data for {}".format(ticker_symbol))
+                    if is_okay:
+                        touch_file(google_site_flag)
                 if is_okay:
                     print ("({}) Updated {}".format(thread_id, output_file))
             # Add ticker in the queue
@@ -327,18 +394,11 @@ def load_historic_data(ticker_symbols):
     print ("CSV load time ({} stocks, {} threads): {}".format(total_stocks_count, thread_id, time.time()-start_time))
     return (convert_to_list(ticker_queue), convert_to_list(unknown_queue))
 
-def google_analysis(stock_list):
-    start_time = time.time()
-    print (json.dumps(googlefinance.getQuotes(stock_list), indent=2))
-    print ("Google finance analyzed {} symbols in {}".format(len(stock_list), time.time()-start_time))
-
 def main():
     start_time = time.time()
     initialize()
-    (_, unknown_list) = load_historic_data(get_symbols())
-    # Try GoogleFinance for unknown stocks
-    if unknown_list:
-        google_analysis(unknown_list)
+    load_historic_data(get_symbols())
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
-main()
+if __name__ == '__main__':
+    main()
