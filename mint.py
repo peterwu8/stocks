@@ -212,7 +212,7 @@ class TickerData:
         self._csv_data = HistoricCsvFile(ticker_symbol)
         if self._csv_data.is_google_data():
             self._google = googlefinance.getQuotes(ticker_symbol)[0]
-            print (json.dumps(self._google, indent=2))
+            #print (json.dumps(self._google, indent=2))
         else:
             self._yahoo = Share(ticker_symbol)
 
@@ -338,7 +338,6 @@ def load_historic_data_for_subset(thread_id, ticker_symbols, ticker_queue, unkno
                     outfile.close()
                 except:
                     print ("INFO: No Yahoo data for {}. Trying Google...".format(ticker_symbol))
-                    unknown_queue.put(ticker_symbol)
                     is_okay = False
                 if not is_okay:
                     google_site_flag = get_google_site_flag(ticker_symbol)
@@ -358,6 +357,8 @@ def load_historic_data_for_subset(thread_id, ticker_symbols, ticker_queue, unkno
                         touch_file(google_site_flag)
                 if is_okay:
                     print ("({}) Updated {}".format(thread_id, output_file))
+                else:
+                    unknown_queue.put(ticker_symbol)
             # Add ticker in the queue
             if is_okay:
                 #TODO: ticker_queue.put(TickerData(ticker_symbol))
