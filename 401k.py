@@ -4,41 +4,46 @@ import os
 import time
 import argparse
 
+class StockAccount:
+    def __init__(self):
+        self.balance = None
+        self.stocks = None
+
 class StockAssistant:
-    def __init__(self, total_target_balance, commit_transaction):
-        # Load stocks I hold
-        self._STOCKS = None
-        self.load_last_purchase_data()
+    def __init__(self, requested_target_balance, commit_transaction):
+        # Load my account
+        self._account = self.load_account_data(requested_target_balance)
         # Load stock data from Yahoo and Google Finance
         stock_loader.initialize()
         (ticker_list, unknown_list) = stock_loader.load_historic_data(self.get_default_symbols())
         # Determine what to buy or sell
-        self.determine_transactions(total_target_balance, ticker_list, commit_transaction)
+        self.determine_transactions(requested_target_balance, ticker_list, commit_transaction)
 
     def get_default_symbols(self):
-        return list(self._STOCKS.keys())
+        return list(self._account.stocks.keys())
 
-    def determine_transactions(self, total_target_balance, ticker_list, commit_transaction):
+    def determine_transactions(self, requested_target_balance, ticker_list, commit_transaction):
         ticker_list.sort(key=lambda x: x.get_name())
         buy_shares = []
         sell_shares = []
         total_holding_balance = 0
         total_action_balance = 0
-        db_is_modified = False # TODO: Modify the DB
+        db_is_modified = False
 
         for ticker in ticker_list:
             #stock_loader.print_ticker_info(ticker)
             price = float(ticker.get_last_price())
             name = ticker.get_name()
-            percent_holding = self._STOCKS[name][0]
-            holding = self._STOCKS[name][1]
+            percent_holding = self._account.stocks[name][0]
+            holding = self._account.stocks[name][1]
             holding_balance = float("{0:.3f}".format(price*holding))
             total_holding_balance += holding_balance
-            target_balance = float("{0:.3f}".format((percent_holding/100)*total_target_balance))
+            target_balance = float("{0:.3f}".format((percent_holding/100)*requested_target_balance))
             action_balance = float("{0:.3f}".format(target_balance-holding_balance))
             total_action_balance += action_balance
             action = "buy"
             action_shares = int(round(action_balance/price))
+            # TODO: self._account.stocks[name][1] += action_shares
             if action_balance < 0:
                 action = "sell"
                 action_balance = -1*action_balance
@@ -53,42 +58,51 @@ class StockAssistant:
                                                      price,
                                                      holding))
             print("> To {}: ${} ({} shares)".format(action, action_balance,action_shares))
+
         print("\n================================================")
         action_messages = buy_shares+sell_shares
         for message in action_messages:
+            db_is_modified = True
             print(message)
         print("Summary")
         print("> Transactions: {}".format(len(action_messages)))
         print("> Transaction cost: ${}".format("{0:.3f}".format(total_action_balance)))
         print("> Holdings: ${}".format(total_holding_balance))
-        print("> Target: ${}".format(total_target_balance))
+        print("> Target: ${}".format(requested_target_balance))
         print("================================================\n")
-        if db_is_modified:
-            write_last_purchase_data()
+        # Commit transactions
+        output_file = self.get_db_file()
+        if (db_is_modified and commit_transaction) or not os.path.exists(output_file):
+            self._account.balance = requested_target_balance
+            self.write_account_data(self._account)
         else:
-            print("DB is already up-to-date")
+            print("Account database is already up-to-date")
 
     def get_db_file(self):
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "401k.db")
 
-    def write_last_purchase_data(self):
-        start_time = time.time()
+    def write_account_data(self, account):
         output_file = self.get_db_file()
+        start_time = time.time()
         fileObject = open(output_file,'wb')
-        pickle.dump(self._STOCKS,fileObject)
+        pickle.dump(account,fileObject)
         fileObject.close()
         print ("Wrote: {}".format(output_file))
 
-    def load_last_purchase_data(self):
+    def load_account_data(self, requested_target_balance):
         start_time = time.time()
         output_file = self.get_db_file()
+        account = None
         if os.path.exists(output_file):
             fileObject = open(output_file,'rb')
-            self._STOCKS = pickle.load(fileObject) 
+            account = pickle.load(fileObject)
             print ("Loaded: {}".format(output_file))
         else:
             # Default value
-            self._STOCKS = {  'itot' : [14.6, 27],
+            print ("New account: {}".format(output_file))
+            account = StockAccount()
+            account.balance = requested_target_balance
+            account.stocks = {  'itot' : [14.6, 27],
                 'ive'  : [14.6, 14],
                 'ijj'  : [4.7, 3],
                 'ijs'  : [4.1, 3],
@@ -100,6 +114,7 @@ class StockAssistant:
                 'lqd'  : [3.4, 3],
                 'iagg' : [7.0, 14],
                 'emb'  : [3.0, 3], }
+        return account
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
