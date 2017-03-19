@@ -43,15 +43,15 @@ class StockAssistant:
             total_action_balance += action_balance
             action = "buy"
             action_shares = int(round(action_balance/price))
-            # TODO: self._account.stocks[name][1] += action_shares
+            self._account.stocks[name][1] += action_shares
             if action_balance < 0:
                 action = "sell"
                 action_balance = -1*action_balance
                 action_shares = -1*action_shares
                 if action_shares > 0:
-                    sell_shares.append("{}: Sell {} shares @ ${}".format(name.upper(), action_shares, price))
+                    sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
             elif action_shares > 0:
-                buy_shares.append("{}: Buy {} shares @ ${}".format(name.upper(), action_shares, price))
+                buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
             print("{}".format(name.upper()))
             print("> Expected: ${}".format(target_balance))
             print("> Actual: ${} (${} x {})".format(holding_balance,
