@@ -26,7 +26,8 @@ class StockAssistant:
         ticker_list.sort(key=lambda x: x.get_name())
         buy_shares = []
         sell_shares = []
-        total_holding_balance = 0
+        total_old_holding_balance = 0
+        total_new_holding_balance = 0
         total_action_balance = 0
         db_is_modified = False
 
@@ -34,30 +35,31 @@ class StockAssistant:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
             percent_holding = self._account.stocks[name][0]
-            holding = self._account.stocks[name][1]
-            holding_balance = float("{0:.3f}".format(price*holding))
-            total_holding_balance += holding_balance
+            holding_shares = self._account.stocks[name][1]
+            holding_balance = float("{0:.3f}".format(price*holding_shares))
+            total_old_holding_balance += holding_balance
             target_balance = float("{0:.3f}".format((percent_holding/100)*requested_target_balance))
-            action_balance = float("{0:.3f}".format(target_balance-holding_balance))
-            total_action_balance += action_balance
+            raw_diff_balance = float("{0:.3f}".format(target_balance-holding_balance))
             action = "buy"
-            action_shares = int(round(action_balance/price))
+            action_shares = int(round(raw_diff_balance/price))
             self._account.stocks[name][1] += action_shares
-            if action_balance < 0:
+            total_new_holding_balance += float("{0:.3f}".format(price*self._account.stocks[name][1]))
+            total_action_balance += float("{0:.3f}".format(price*action_shares))
+            if raw_diff_balance < 0:
                 action = "sell"
-                action_balance = -1*action_balance
+                raw_diff_balance = -1*raw_diff_balance
                 action_shares = -1*action_shares
                 if action_shares > 0:
-                    sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
+                    sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding_shares, self._account.stocks[name][1]))
             elif action_shares > 0:
-                buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
+                buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding_shares, self._account.stocks[name][1]))
             print ("{}".format(name.upper()))
             print("> Name: {}".format(ticker.get_long_name()))
             print("> Expected: ${}".format(target_balance))
             print("> Actual: ${} (${} x {})".format(holding_balance,
                                                      price,
-                                                     holding))
-            print("> To {}: ${} ({} shares)".format(action, action_balance,action_shares))
+                                                     holding_shares))
+            print("> To {}: ${} ({} shares)".format(action, raw_diff_balance,action_shares))
 
         print("\n================================================")
         action_messages = buy_shares+sell_shares
@@ -67,9 +69,12 @@ class StockAssistant:
         print("Summary")
         print("> Transactions: {}".format(len(action_messages)))
         print("> Transaction cost: ${}".format("{0:.3f}".format(total_action_balance)))
-        print("> Holdings: ${}".format(total_holding_balance))
-        print("> Old target: ${}".format(self._account.balance))
-        print("> New target: ${}".format(requested_target_balance))
+        print("> Old")
+        print("  > Holdings: ${}".format(total_old_holding_balance))
+        print("  > Target: ${}".format(self._account.balance))
+        print("> New")
+        print("  > Holdings: ${}".format(total_new_holding_balance))
+        print("  > Target: ${}".format(requested_target_balance))
         print("================================================\n")
         # Commit transactions
         output_file = self.get_db_file()
@@ -128,7 +133,7 @@ def process_options():
 def main():
     start_time = time.time()
     args = process_options()
-    StockAssistant(int(args.target_balance), args.commit, args.refresh)
+    StockAssistant(float(args.target_balance), args.commit, args.refresh)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 if __name__ == '__main__':
