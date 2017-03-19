@@ -31,7 +31,6 @@ class StockAssistant:
         db_is_modified = False
 
         for ticker in ticker_list:
-            #stock_loader.print_ticker_info(ticker)
             price = float(ticker.get_last_price())
             name = ticker.get_name()
             percent_holding = self._account.stocks[name][0]
@@ -52,7 +51,8 @@ class StockAssistant:
                     sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
             elif action_shares > 0:
                 buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding, self._account.stocks[name][1]))
-            print("{}".format(name.upper()))
+            print ("{}".format(name.upper()))
+            print("> Name: {}".format(ticker.get_long_name()))
             print("> Expected: ${}".format(target_balance))
             print("> Actual: ${} (${} x {})".format(holding_balance,
                                                      price,
