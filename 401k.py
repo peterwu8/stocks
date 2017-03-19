@@ -90,8 +90,7 @@ class StockAssistant:
         print("  > Target: ${}".format(requested_target_balance))
         print("================================================\n")
         # Commit transactions
-        output_file = self.get_db_file()
-        if (db_is_modified and commit_transaction) or not os.path.exists(output_file):
+        if db_is_modified and commit_transaction:
             self._account.balance = requested_target_balance
             self.write_account_data()
         else:
@@ -133,6 +132,7 @@ class StockAssistant:
                 'lqd'  : StockHolding(3.4, 3),
                 'iagg' : StockHolding(7.0, 14),
                 'emb'  : StockHolding(3.0, 3), }
+            self.write_account_data()
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
