@@ -21,18 +21,14 @@ def get_default_symbols():
     global STOCKS
     return list(STOCKS.keys())
 
-def process_options():
-    parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
-    parser.add_argument('--balance', metavar='BALANCE', help='BALANCE to keep in stocks and bonds', default=10000)
-    args = parser.parse_args()
-    return args
-
-def what_to_buy(total_target_balance, ticker_list):
+def what_to_buy(total_target_balance, ticker_list, modify_db):
     ticker_list.sort(key=lambda x: x.get_name())
     buy_shares = []
     sell_shares = []
     total_holding_balance = 0
     total_action_balance = 0
+    db_is_modified = False # TODO: Modify the DB
+
     for ticker in ticker_list:
         #stock_loader.print_ticker_info(ticker)
         price = float(ticker.get_last_price())
@@ -70,6 +66,8 @@ def what_to_buy(total_target_balance, ticker_list):
     print("> Holdings: ${}".format(total_holding_balance))
     print("> Target: ${}".format(total_target_balance))
     print("================================================\n")
+    if db_is_modified:
+        write_last_purchase_data()
 
 def get_db_file():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "401k.db")
@@ -90,14 +88,20 @@ def load_last_purchase_data():
         STOCKS = pickle.load(fileObject) 
         print ("Loaded: {}".format(output_file))
 
+def process_options():
+    parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
+    parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=10000)
+    parser.add_argument('--commit', action="store_true", help='BALANCE to keep in stocks and bonds')
+    args = parser.parse_args()
+    return args
+
 def main():
     start_time = time.time()
     stock_loader.initialize()
     load_last_purchase_data()
     args = process_options()
     (ticker_list, unknown_list) = stock_loader.load_historic_data(get_default_symbols())
-    what_to_buy(int(args.balance), ticker_list)
-    write_last_purchase_data()
+    what_to_buy(int(args.target_balance), ticker_list, args.commit)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 if __name__ == '__main__':
