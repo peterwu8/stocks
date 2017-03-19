@@ -68,7 +68,8 @@ class StockAssistant:
         print("> Transactions: {}".format(len(action_messages)))
         print("> Transaction cost: ${}".format("{0:.3f}".format(total_action_balance)))
         print("> Holdings: ${}".format(total_holding_balance))
-        print("> Target: ${}".format(requested_target_balance))
+        print("> Old target: ${}".format(self._account.balance))
+        print("> New target: ${}".format(requested_target_balance))
         print("================================================\n")
         # Commit transactions
         output_file = self.get_db_file()
@@ -119,7 +120,7 @@ class StockAssistant:
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
     parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=10000)
-    parser.add_argument('--commit', action="store_true", help='BALANCE to keep in stocks and bonds')
+    parser.add_argument('--commit', action="store_true", help='Commit the transaction (buy/sell stocks and bonds)')
     args = parser.parse_args()
     return args
 
