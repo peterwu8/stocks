@@ -8,6 +8,11 @@ import argparse
 #   Get new share distribution and deviation percentage
 #   Store an array of accounts (to show history of balances)
 
+class StockHolding:
+    def __init__(self, target_percent, shares_held):
+        self.target_percent = target_percent/100
+        self.shares_held = shares_held
+
 class StockAccount:
     def __init__(self):
         self.balance = None
@@ -43,31 +48,31 @@ class StockAssistant:
         for ticker in ticker_list:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
-            percent_holding = self._account.stocks[name][0]
-            holding_shares = self._account.stocks[name][1]
-            holding_balance = float("{0:.3f}".format(price*holding_shares))
-            total_old_holding_balance += holding_balance
-            target_balance = float("{0:.3f}".format((percent_holding/100)*requested_target_balance))
-            raw_diff_balance = float("{0:.3f}".format(target_balance-holding_balance))
+            target_percent = self._account.stocks[name].target_percent
+            shares_held = self._account.stocks[name].shares_held
+            balance_held = float("{0:.3f}".format(price*shares_held))
+            total_old_holding_balance += balance_held
+            target_balance = float("{0:.3f}".format((target_percent/100)*requested_target_balance))
+            raw_diff_balance = float("{0:.3f}".format(target_balance-balance_held))
             action = "buy"
             action_shares = int(round(raw_diff_balance/price))
-            self._account.stocks[name][1] += action_shares
-            total_new_holding_balance += float("{0:.3f}".format(price*self._account.stocks[name][1]))
+            self._account.stocks[name].shares_held += action_shares
+            total_new_holding_balance += float("{0:.3f}".format(price*self._account.stocks[name].shares_held))
             total_action_balance += float("{0:.3f}".format(price*action_shares))
             if raw_diff_balance < 0:
                 action = "sell"
                 raw_diff_balance = -1*raw_diff_balance
                 action_shares = -1*action_shares
                 if action_shares > 0:
-                    sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding_shares, self._account.stocks[name][1]))
+                    sell_shares.append("{}: Sell {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, shares_held, self._account.stocks[name].shares_held))
             elif action_shares > 0:
-                buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, holding_shares, self._account.stocks[name][1]))
+                buy_shares.append("{}: Buy {} shares @ ${} (old: {}, new: {})".format(name.upper(), action_shares, price, shares_held, self._account.stocks[name].shares_held))
             print ("{}".format(name.upper()))
             print("> Name: {}".format(ticker.get_long_name()))
             print("> Expected: ${}".format(target_balance))
-            print("> Actual: ${} (${} x {})".format(holding_balance,
+            print("> Actual: ${} (${} x {})".format(balance_held,
                                                      price,
-                                                     holding_shares))
+                                                     shares_held))
             print("> To {}: ${} ({} shares)".format(action, raw_diff_balance,action_shares))
 
         print("\n================================================")
@@ -117,18 +122,18 @@ class StockAssistant:
             print ("New account: {}".format(output_file))
             self._account = StockAccount()
             self._account.balance = 10000
-            self._account.stocks = {  'itot' : [14.6, 27],
-                'ive'  : [14.6, 14],
-                'ijj'  : [4.7, 3],
-                'ijs'  : [4.1, 3],
-                'frel' : [1.5, 6],
-                'feny' : [1.5, 7],
-                'iefa' : [30.8, 55],
-                'iemg' : [8.3, 18],
-                'agg'  : [6.6, 6],
-                'lqd'  : [3.4, 3],
-                'iagg' : [7.0, 14],
-                'emb'  : [3.0, 3], }
+            self._account.stocks = {  'itot' : StockHolding(14.6, 27),
+                'ive'  : StockHolding(14.6, 14),
+                'ijj'  : StockHolding(4.7, 3),
+                'ijs'  : StockHolding(4.1, 3),
+                'frel' : StockHolding(1.5, 6),
+                'feny' : StockHolding(1.5, 7),
+                'iefa' : StockHolding(30.8, 55),
+                'iemg' : StockHolding(8.3, 18),
+                'agg'  : StockHolding(6.6, 6),
+                'lqd'  : StockHolding(3.4, 3),
+                'iagg' : StockHolding(7.0, 14),
+                'emb'  : StockHolding(3.0, 3), }
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
