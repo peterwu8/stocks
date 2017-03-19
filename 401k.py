@@ -71,12 +71,12 @@ def what_to_buy(total_target_balance, ticker_list):
     print("> Target: ${}".format(total_target_balance))
     print("================================================\n")
 
-def get_last_purchase_data_csv_file():
-    return os.path.join(stock_loader.get_output_folder(), "_last_purchase.csv")
+def get_db_file():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "401k.db")
 
 def write_last_purchase_data():
     start_time = time.time()
-    output_file = get_last_purchase_data_csv_file()
+    output_file = get_db_file()
     fileObject = open(output_file,'wb')
     pickle.dump(STOCKS,fileObject)
     fileObject.close()
@@ -84,7 +84,7 @@ def write_last_purchase_data():
 
 def load_last_purchase_data():
     start_time = time.time()
-    output_file = get_last_purchase_data_csv_file()
+    output_file = get_db_file()
     if os.path.exists(output_file):
         fileObject = open(output_file,'rb')
         STOCKS = pickle.load(fileObject) 
