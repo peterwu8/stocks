@@ -48,11 +48,10 @@ class StockAssistant:
         for ticker in ticker_list:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
-            target_percent = self._account.stocks[name].target_percent
             shares_held = self._account.stocks[name].shares_held
             balance_held = float("{0:.3f}".format(price*shares_held))
             total_old_holding_balance += balance_held
-            target_balance = float("{0:.3f}".format((target_percent/100)*requested_target_balance))
+            target_balance = float("{0:.3f}".format(self._account.stocks[name].target_percent*requested_target_balance))
             raw_diff_balance = float("{0:.3f}".format(target_balance-balance_held))
             action = "buy"
             action_shares = int(round(raw_diff_balance/price))
