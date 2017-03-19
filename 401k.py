@@ -14,10 +14,12 @@ class StockAccount:
         self.stocks = None
 
 class StockAssistant:
-    def __init__(self, requested_target_balance, commit_transaction, refresh_financials):
+    def __init__(self, requested_increment, requested_target_balance, commit_transaction, refresh_financials):
         # Load my account
         self.load_account_data()
-        if not requested_target_balance:
+        if requested_increment:
+            requested_target_balance = self._account.balance + float(requested_increment)
+        elif not requested_target_balance:
             requested_target_balance = self._account.balance
         requested_target_balance = float(requested_target_balance)
         # Load stock data from Yahoo and Google Finance
@@ -130,6 +132,7 @@ class StockAssistant:
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
+    parser.add_argument('--add', metavar='INCREMENT', help='Add INCREMENT to target BALANCE', default=None)
     parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=None)
     parser.add_argument('--commit', action="store_true", help='Commit the transaction (buy/sell stocks and bonds)')
     parser.add_argument('--refresh', action="store_true", help='Refresh stock data)')
@@ -139,7 +142,7 @@ def process_options():
 def main():
     start_time = time.time()
     args = process_options()
-    StockAssistant(args.target_balance, args.commit, args.refresh)
+    StockAssistant(args.add, args.target_balance, args.commit, args.refresh)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 if __name__ == '__main__':
