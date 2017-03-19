@@ -4,6 +4,10 @@ import os
 import time
 import argparse
 
+# TODOs:
+#   Get new share distribution and deviation percentage
+#   Store an array of accounts (to show history of balances)
+
 class StockAccount:
     def __init__(self):
         self.balance = None
@@ -12,7 +16,7 @@ class StockAccount:
 class StockAssistant:
     def __init__(self, requested_target_balance, commit_transaction, refresh_financials):
         # Load my account
-        self._account = self.load_account_data()
+        self.load_account_data()
         if not requested_target_balance:
             requested_target_balance = self._account.balance
         requested_target_balance = float(requested_target_balance)
@@ -34,7 +38,6 @@ class StockAssistant:
         total_action_balance = 0
         db_is_modified = False
 
-        # TODO: Get new share distribution and deviation percentage
         for ticker in ticker_list:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
@@ -84,35 +87,35 @@ class StockAssistant:
         output_file = self.get_db_file()
         if (db_is_modified and commit_transaction) or not os.path.exists(output_file):
             self._account.balance = requested_target_balance
-            self.write_account_data(self._account)
+            self.write_account_data()
         else:
             print("Account database is already up-to-date")
 
     def get_db_file(self):
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "401k.db")
 
-    def write_account_data(self, account):
+    def write_account_data(self):
         output_file = self.get_db_file()
         start_time = time.time()
         fileObject = open(output_file,'wb')
-        pickle.dump(account,fileObject)
+        pickle.dump(self._account, fileObject)
         fileObject.close()
         print ("Wrote: {}".format(output_file))
 
     def load_account_data(self):
         start_time = time.time()
         output_file = self.get_db_file()
-        account = None
+        self._account = None
         if os.path.exists(output_file):
             fileObject = open(output_file,'rb')
-            account = pickle.load(fileObject)
+            self._account = pickle.load(fileObject)
             print ("Loaded: {}".format(output_file))
         else:
             # Default values
             print ("New account: {}".format(output_file))
-            account = StockAccount()
-            account.balance = 10000
-            account.stocks = {  'itot' : [14.6, 27],
+            self._account = StockAccount()
+            self._account.balance = 10000
+            self._account.stocks = {  'itot' : [14.6, 27],
                 'ive'  : [14.6, 14],
                 'ijj'  : [4.7, 3],
                 'ijs'  : [4.1, 3],
@@ -124,7 +127,6 @@ class StockAssistant:
                 'lqd'  : [3.4, 3],
                 'iagg' : [7.0, 14],
                 'emb'  : [3.0, 3], }
-        return account
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
