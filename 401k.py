@@ -34,6 +34,7 @@ class StockAssistant:
         total_action_balance = 0
         db_is_modified = False
 
+        # TODO: Get new share distribution and deviation percentage
         for ticker in ticker_list:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
