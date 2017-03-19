@@ -12,7 +12,10 @@ class StockAccount:
 class StockAssistant:
     def __init__(self, requested_target_balance, commit_transaction, refresh_financials):
         # Load my account
-        self._account = self.load_account_data(requested_target_balance)
+        self._account = self.load_account_data()
+        if not requested_target_balance:
+            requested_target_balance = self._account.balance
+        requested_target_balance = float(requested_target_balance)
         # Load stock data from Yahoo and Google Finance
         stock_loader.initialize(refresh_financials)
         (ticker_list, unknown_list) = stock_loader.load_historic_data(self.get_default_symbols())
@@ -95,7 +98,7 @@ class StockAssistant:
         fileObject.close()
         print ("Wrote: {}".format(output_file))
 
-    def load_account_data(self, requested_target_balance):
+    def load_account_data(self):
         start_time = time.time()
         output_file = self.get_db_file()
         account = None
@@ -104,10 +107,10 @@ class StockAssistant:
             account = pickle.load(fileObject)
             print ("Loaded: {}".format(output_file))
         else:
-            # Default value
+            # Default values
             print ("New account: {}".format(output_file))
             account = StockAccount()
-            account.balance = requested_target_balance
+            account.balance = 10000
             account.stocks = {  'itot' : [14.6, 27],
                 'ive'  : [14.6, 14],
                 'ijj'  : [4.7, 3],
@@ -124,7 +127,7 @@ class StockAssistant:
 
 def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
-    parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=10000)
+    parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=None)
     parser.add_argument('--commit', action="store_true", help='Commit the transaction (buy/sell stocks and bonds)')
     parser.add_argument('--refresh', action="store_true", help='Refresh stock data)')
     args = parser.parse_args()
@@ -133,7 +136,7 @@ def process_options():
 def main():
     start_time = time.time()
     args = process_options()
-    StockAssistant(float(args.target_balance), args.commit, args.refresh)
+    StockAssistant(args.target_balance, args.commit, args.refresh)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 if __name__ == '__main__':
