@@ -10,11 +10,11 @@ class StockAccount:
         self.stocks = None
 
 class StockAssistant:
-    def __init__(self, requested_target_balance, commit_transaction):
+    def __init__(self, requested_target_balance, commit_transaction, refresh_financials):
         # Load my account
         self._account = self.load_account_data(requested_target_balance)
         # Load stock data from Yahoo and Google Finance
-        stock_loader.initialize()
+        stock_loader.initialize(refresh_financials)
         (ticker_list, unknown_list) = stock_loader.load_historic_data(self.get_default_symbols())
         # Determine what to buy or sell
         self.determine_transactions(requested_target_balance, ticker_list, commit_transaction)
@@ -121,13 +121,14 @@ def process_options():
     parser = argparse.ArgumentParser(description='Analyze ticker_symbol prices.')
     parser.add_argument('--target_balance', metavar='BALANCE', help='Target BALANCE to keep in stocks and bonds', default=10000)
     parser.add_argument('--commit', action="store_true", help='Commit the transaction (buy/sell stocks and bonds)')
+    parser.add_argument('--refresh', action="store_true", help='Refresh stock data)')
     args = parser.parse_args()
     return args
 
 def main():
     start_time = time.time()
     args = process_options()
-    StockAssistant(int(args.target_balance), args.commit)
+    StockAssistant(int(args.target_balance), args.commit, args.refresh)
     print ("Total elapsed time: {}".format(time.time()-start_time))
 
 if __name__ == '__main__':

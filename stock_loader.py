@@ -18,6 +18,7 @@ import googlefinance
 import pandas_datareader.data as web
 
 MAX_ALLOWED_DAYS_TO_SUBTRACT = 5*365
+REFRESH_FINANCIALS = False
 
 ############## UTILITY FUNCTIONS ##############
 def get_ratio(now, base):
@@ -45,7 +46,9 @@ def modification_date(filename):
 def get_output_folder():
     return os.path.join("D:\\", 'data', 'stocks', 'db')
 
-def initialize():
+def initialize(refresh_financials=False):
+    global REFRESH_FINANCIALS
+    REFRESH_FINANCIALS = refresh_financials
     directory = get_output_folder()
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -280,13 +283,13 @@ def split_into_sublists(seq, num):
     return out
 
 def load_historic_data_for_subset(thread_id, ticker_symbols, ticker_queue, unknown_queue):
-    global MAX_ALLOWED_DAYS_TO_SUBTRACT
+    global MAX_ALLOWED_DAYS_TO_SUBTRACT, REFRESH_FINANCIALS
     for ticker_symbol_sublist in split_into_sublists(ticker_symbols, 150):
         tickers = []
         for ticker_symbol in ticker_symbol_sublist:
             output_file = get_historical_data_csv_file(ticker_symbol)
             is_okay = True
-            if not os.path.exists(output_file) or modification_date(output_file) != get_today_string():
+            if REFRESH_FINANCIALS or not os.path.exists(output_file) or modification_date(output_file) != get_today_string():
                 try:
                     os.remove(output_file)
                 except OSError:
