@@ -1,23 +1,8 @@
 import stock_loader
-import json
 import pickle
-import re
-from queue import Queue
-from threading import Thread, Lock
 import os
-import sys
-import urllib.request, urllib.parse, urllib.error
 import time
 import argparse
-from yahoo_finance import Share
-from rtstock.stock import Stock
-from pprint import pprint
-from datetime import datetime, timedelta
-from functools import reduce
-import csv
-from multiprocessing import Pool
-import googlefinance 
-import pandas_datareader.data as web
 
 STOCKS = {  'itot' : [14.6, 27],
             'ive'  : [14.6, 14],
