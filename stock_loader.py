@@ -386,6 +386,9 @@ class StockAssistant:
     def get_default_symbols(self):
         return list(self._account.stocks.keys())
 
+    def roundoff(self, value):
+        return float("{0:.3f}".format(value))
+
     def determine_transactions(self, requested_target_balance, ticker_list, commit_transaction):
         ticker_list.sort(key=lambda x: x.get_name())
         buy_shares = []
@@ -394,20 +397,23 @@ class StockAssistant:
         total_new_holding_balance = 0
         total_action_balance = 0
         db_is_modified = False
+        drift_values = []
 
         for ticker in ticker_list:
             price = float(ticker.get_last_price())
             name = ticker.get_name()
             shares_held = self._account.stocks[name].shares_held
-            balance_held = float("{0:.3f}".format(price*shares_held))
+            balance_held = self.roundoff(price*shares_held)
             total_old_holding_balance += balance_held
-            target_balance = float("{0:.3f}".format(self._account.stocks[name].target_percent*requested_target_balance))
-            raw_diff_balance = float("{0:.3f}".format(target_balance-balance_held))
+            target_balance = self.roundoff(self._account.stocks[name].target_percent*requested_target_balance)
+            raw_diff_balance = self.roundoff(target_balance-balance_held)
             action = "buy"
             action_shares = int(round(raw_diff_balance/price))
             self._account.stocks[name].shares_held += action_shares
-            total_new_holding_balance += float("{0:.3f}".format(price*self._account.stocks[name].shares_held))
-            total_action_balance += float("{0:.3f}".format(price*action_shares))
+            new_holding_balance = self.roundoff(price*self._account.stocks[name].shares_held)
+            total_new_holding_balance += new_holding_balance
+            drift_values.append((name, balance_held, new_holding_balance))
+            total_action_balance += self.roundoff(price*action_shares)
             if raw_diff_balance < 0:
                 action = "sell"
                 raw_diff_balance = -1*raw_diff_balance
@@ -424,6 +430,18 @@ class StockAssistant:
                                                      shares_held))
             print("> To {}: ${} ({} shares)".format(action, raw_diff_balance,action_shares))
 
+        print("==================== DRIFT ============================")
+        total_old_drift = 0
+        total_new_drift = 0
+        for name, old_holding, new_holding in drift_values:
+            ideal_target_percent = 100*self._account.stocks[name].target_percent
+            old_target_percent = 100*old_holding/total_old_holding_balance
+            total_old_drift += abs(old_target_percent-ideal_target_percent)
+            new_target_percent = 100*new_holding/total_new_holding_balance
+            total_new_drift += abs(new_target_percent-ideal_target_percent)
+            print("{}: new {}%, old {}%".format(name.upper(), self.roundoff(new_target_percent-ideal_target_percent), self.roundoff(old_target_percent-ideal_target_percent)))
+        print("Total: new {}%, old {}%".format(self.roundoff(total_new_drift/2), self.roundoff(total_old_drift/2)))
+            
         print("\n================================================")
         action_messages = buy_shares+sell_shares
         for message in action_messages:
